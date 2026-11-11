@@ -26,6 +26,7 @@ import { createTrendsModule } from './modules/trendsModule.js';
 import { createRulesModule } from './modules/rulesModule.js';
 import { createSyncModule } from './modules/syncModule.js';
 import { createAccountsModule } from './modules/accountsModule.js';
+import { createBalancesModule } from './modules/balancesModule.js';
 import { createCategoriesModule } from './modules/categoriesModule.js';
 import { createSetupModule } from './modules/setupModule.js';
 import { createAgentsModule } from './modules/agentsModule.js';
@@ -112,6 +113,7 @@ const app = createApp({
         createRulesModule(() => apiService),
         createSyncModule(() => apiService),
         createAccountsModule(() => apiService),
+        createBalancesModule(() => apiService),
         createCategoriesModule(() => apiService),
         createSetupModule(),
         createAgentsModule(() => apiService),
@@ -566,6 +568,9 @@ const app = createApp({
                 case 'accounts':
                     this.loadBankAccounts();
                     this.loadBankBackends();
+                    break;
+                case 'balances':
+                    this.loadBalances();
                     break;
                 case 'users':
                     this.loadUsers();

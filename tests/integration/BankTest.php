@@ -33,7 +33,8 @@ class BankTest extends DatabaseTestCase
         $accounts = Bank::get();
         // 111@bnp is followed twice (by two users): listed once
         $this->assertSame(['fail@bank', '111@bnp'], array_column($accounts, 'bankId'));
-        $this->assertSame(['bankId' => '111@bnp', 'account_number' => '111', 'bank_name' => 'bnp', 'label' => null, 'manual' => false],
+        $this->assertSame(['bankId' => '111@bnp', 'account_number' => '111', 'bank_name' => 'bnp', 'label' => null, 'manual' => false,
+            'owner' => null, 'balance' => null, 'balance_at' => null],
             array_diff_key($accounts[1], ['id' => true]));
         $this->assertGreaterThan(0, $accounts[1]['id']);
 
@@ -85,6 +86,75 @@ class BankTest extends DatabaseTestCase
         $this->expectException(Error::class);
         $this->expectExceptionCode(400);
         Bank::update($account['id'], '222', 'bnp', str_repeat('é', 101));
+    }
+
+    public function testOwner()
+    {
+        $this->loginAs(self::ADMIN);
+        $account = Bank::create('222', 'bnp');
+        $this->assertNull(array_column(Bank::accounts(), 'owner', 'bankId')['222@bnp']);
+
+        // Trimmed, control characters replaced; listed for the administrators and for every user
+        $this->assertSame('Marie Dupont', Bank::update($account['id'], '222', 'bnp', null, "  Marie\tDupont ")['owner']);
+        $this->assertSame('Marie Dupont', array_column(Bank::accounts(), 'owner', 'bankId')['222@bnp']);
+        $this->loginAs(self::USER);
+        $this->assertSame('Marie Dupont', array_column(Bank::get(), 'owner', 'bankId')['222@bnp']);
+
+        // Omitted (older clients, the name alone modified): kept; empty: removed
+        $this->loginAs(self::ADMIN);
+        $updated = Bank::update($account['id'], '222', 'bnp', 'Livret A');
+        $this->assertSame(['Livret A', 'Marie Dupont'], [$updated['label'], $updated['owner']]);
+        $this->assertNull(Bank::update($account['id'], '222', 'bnp', null, ' ')['owner']);
+        $this->assertNull(array_column(Bank::get(), 'owner', 'bankId')['222@bnp']);
+
+        // A manual account may have one from its creation
+        $manual = Bank::createManual('Espèces', null, ' Paul ');
+        $this->assertSame('Paul', $manual['owner']);
+        $this->assertSame('Paul', array_column(Bank::get(), 'owner', 'bankId')[$manual['bankId']]);
+        $this->assertNull(Bank::createManual('Tirelire')['owner']);
+
+        // 100 characters at most
+        $this->expectException(Error::class);
+        $this->expectExceptionCode(400);
+        Bank::update($account['id'], '222', 'bnp', null, str_repeat('é', 101));
+    }
+
+    public function testSyncRecordsTheBalanceGivenByTheBank()
+    {
+        $this->loginAs(self::ADMIN);
+        $before = array_column(Bank::get(), null, 'bankId')['111@bnp'];
+        $this->assertNull($before['balance']);
+        $this->assertNull($before['balance_at']);
+
+        ob_start();
+        try {
+            Bank::getSync(null, '111@bnp');
+        } finally {
+            ob_end_clean();
+        }
+
+        // The balance woob lists for the account (fake woob: 250.00), with its date
+        $accounts = array_column(Bank::get(), null, 'bankId');
+        $this->assertSame(250.0, $accounts['111@bnp']['balance']);
+        $this->assertNotNull($accounts['111@bnp']['balance_at']);
+        // Not synchronized: still unknown
+        $this->assertNull($accounts['fail@bank']['balance']);
+    }
+
+    public function testTheBalanceOfAManualAccountIsTheSumOfItsTransactions()
+    {
+        $this->loginAs(self::ADMIN);
+        $manual = Bank::createManual('Espèces');
+        $balance = fn() => array_column(Bank::get(), 'balance', 'bankId')[$manual['bankId']];
+        $this->assertSame(0.0, $balance());
+
+        Transaction::createManual($manual['id'], date('Y-m-d'), 'Retrait', 100);
+        $spent = Transaction::createManual($manual['id'], date('Y-m-d'), 'Boulangerie', -12.5);
+        $this->assertSame(87.5, $balance());
+
+        // A split transaction still counts for its amount
+        Transaction::split($spent['id'], [['category' => 0, 'amount' => -2.5]]);
+        $this->assertSame(87.5, $balance());
     }
 
     public function testCreateDuplicateAndInvalid()

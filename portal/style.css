@@ -9711,3 +9711,57 @@ button.is-busy:not(.btn-confirm-danger):hover {
     margin-left: 4px;
     font-variant-numeric: tabular-nums;
 }
+
+/* Balances tab: a card per account (those of the tags), grouped by owner */
+.balance-owner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.balance-owner .material-icons {
+    font-size: 20px;
+    color: var(--text-secondary);
+}
+
+.balance-owner-total {
+    font-variant-numeric: tabular-nums;
+}
+
+.balances-kpis {
+    margin-bottom: 20px;
+}
+
+/* Filter by owner: the names as they were typed */
+.balance-owners button {
+    text-transform: none;
+    letter-spacing: normal;
+}
+
+/* No action in the corner of the card: its name, then its balance at the end of the line
+   (the date of the balance is the tooltip of the card) */
+.balance-item .tag-open-head {
+    flex-wrap: nowrap;
+    padding-right: 0;
+}
+
+.balance-item .tag-total {
+    margin-left: auto;
+}
+
+.account-belongs {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+/* Balance of the account shown, on the right of its name and owner */
+.balance-detail-amount {
+    margin-left: auto;
+    text-align: right;
+}
+
+.balance-detail-amount .summary-value {
+    display: block;
+    font-size: 24px;
+    font-variant-numeric: tabular-nums;
+}

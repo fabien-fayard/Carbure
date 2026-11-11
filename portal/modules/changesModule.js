@@ -27,6 +27,7 @@ export const TAB_KINDS = {
     rules: ['categories'],
     categories: ['categories'],
     accounts: ['accounts'],
+    balances: ['accounts', 'transactions'],
     sync: ['accounts'],
     config: ['settings']
 };

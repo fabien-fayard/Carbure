@@ -90,6 +90,7 @@ class ApiResolverTest extends TestCase
         'GET /.well-known/oauth-protected-resource/api/mcp' => 'public',
         'GET /backup' => 'admin',
         'GET /backup/export' => 'admin',
+        'GET /balance/transactions' => 'user',
         'GET /bank' => 'user',
         'GET /bank/accounts' => 'admin',
         'GET /bank/backends' => 'admin',

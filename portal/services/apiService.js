@@ -827,8 +827,10 @@ export function createApiService(baseUrl, authToken = null, onUnauthorized = nul
     }
 
     /**
-     * Accounts of the household (every user), the manual ones flagged
-     * @returns {Promise<Array<{id: number, account_number: string, bank_name: string, label: string|null, manual: boolean}>>}
+     * Accounts of the household (every user), the manual ones flagged, with their owner and
+     * their balance (given by the bank at the last synchronization; null: unknown)
+     * @returns {Promise<Array<{id: number, bankId: string, account_number: string, bank_name: string, label: string|null,
+     *                          manual: boolean, owner: string|null, balance: number|null, balance_at: string|null}>>}
      */
     async function fetchAccounts() {
         const data = await request(`${baseUrl}/bank`, {}, 'Failed to fetch the accounts');
@@ -836,13 +838,27 @@ export function createApiService(baseUrl, authToken = null, onUnauthorized = nul
     }
 
     /**
+     * Transactions of one account for a month, most recent first (Balances tab)
+     * @param {string} account - bankId of the account (account_number@bank_name)
+     * @param {number} month - Month (1-12)
+     * @param {number} year - Year
+     * @returns {Promise<Array>} Array of transaction objects
+     */
+    async function fetchAccountTransactions(account, month, year) {
+        const url = `${baseUrl}/balance/transactions?${new URLSearchParams({ account, month, year })}`;
+        const data = await request(url, {}, 'Failed to fetch the transactions of the account');
+        return Array.isArray(data) ? data : [];
+    }
+
+    /**
      * Adds a manual account (never synchronized, its transactions entered by hand)
      * @param {string} label - Name of the account
      * @param {string} [account_number] - Its number (generated when empty)
+     * @param {string} [owner] - Who the account belongs to ('' for nobody)
      * @returns {Promise<Object>} The account
      */
-    async function createManualAccount(label, account_number = '') {
-        return request(`${baseUrl}/bank/manual`, { method: 'POST', body: JSON.stringify({ label, account_number }) }, 'Failed to add the account');
+    async function createManualAccount(label, account_number = '', owner = '') {
+        return request(`${baseUrl}/bank/manual`, { method: 'POST', body: JSON.stringify({ label, account_number, owner }) }, 'Failed to add the account');
     }
 
     /**
@@ -851,10 +867,11 @@ export function createApiService(baseUrl, authToken = null, onUnauthorized = nul
      * @param {string} account_number - Account identifier in woob
      * @param {string} bank_name - woob backend name
      * @param {string} label - Name given to the account ('' removes it)
+     * @param {string} owner - Who the account belongs to ('' removes it)
      * @returns {Promise<Object>} The account
      */
-    async function updateBankAccount(id, account_number, bank_name, label = '') {
-        return request(`${baseUrl}/bank`, { method: 'PUT', body: JSON.stringify({ id, account_number, bank_name, label }) }, 'Failed to modify the account');
+    async function updateBankAccount(id, account_number, bank_name, label = '', owner = '') {
+        return request(`${baseUrl}/bank`, { method: 'PUT', body: JSON.stringify({ id, account_number, bank_name, label, owner }) }, 'Failed to modify the account');
     }
 
     /**
@@ -1611,6 +1628,7 @@ export function createApiService(baseUrl, authToken = null, onUnauthorized = nul
         createTransaction,
         updateTransaction,
         fetchAccounts,
+        fetchAccountTransactions,
         createManualAccount,
         fetchTags,
         createTag,

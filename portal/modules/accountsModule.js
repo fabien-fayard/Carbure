@@ -9,8 +9,8 @@
  *    (bank list -b <backend>) can be followed. A bank that asks a two-factor
  *    authentication is listed interactively: the administrator approves the
  *    connection in the bank app while woob waits (#299).
- * Followed accounts: list with the result of the last synchronization, label
- * modified in a modal, delete.
+ * Followed accounts: list with the result of the last synchronization, label and
+ * owner modified in a modal, delete.
  *
  * @module accountsModule
  */
@@ -66,9 +66,9 @@ export function createAccountsModule(getApiService) {
                 // Label of a followed account, modified in a modal
                 showAccountModal: false,
                 savingAccount: false,
-                // Account of the modal: {id, account_number, bank_name, label, manual}; a new
-                // manual account has no id
-                accountForm: { id: null, account_number: '', bank_name: '', label: '', manual: false },
+                // Account of the modal: {id, account_number, bank_name, label, owner, manual}; a
+                // new manual account has no id
+                accountForm: { id: null, account_number: '', bank_name: '', label: '', owner: '', manual: false },
                 // Banks connected in woob (backends): [{name, module, label}]
                 bankBackends: [],
                 // Name of a bank connection, modified in a modal: {name, module, label}
@@ -118,6 +118,14 @@ export function createAccountsModule(getApiService) {
              */
             manualBankAccounts() {
                 return manualAccountsOf(this.bankAccounts);
+            },
+
+            /**
+             * Owners already given to an account, suggested in the account modal
+             * @returns {Array<string>}
+             */
+            accountOwners() {
+                return [...new Set(this.bankAccounts.map(a => a.owner).filter(Boolean))].sort((a, b) => a.localeCompare(b));
             },
 
             /**
@@ -651,7 +659,7 @@ export function createAccountsModule(getApiService) {
              * @param {Object} account - Account to modify
              */
             openAccountModal(account) {
-                this.accountForm = { id: account.id, account_number: account.account_number, bank_name: account.bank_name, label: account.label || '', manual: !!account.manual };
+                this.accountForm = { id: account.id, account_number: account.account_number, bank_name: account.bank_name, label: account.label || '', owner: account.owner || '', manual: !!account.manual };
                 this.showAccountModal = true;
             },
 
@@ -659,7 +667,7 @@ export function createAccountsModule(getApiService) {
              * Opens the modal adding a manual account (cash, a bank woob does not support)
              */
             openManualAccountModal() {
-                this.accountForm = { id: null, account_number: '', bank_name: 'manual', label: '', manual: true };
+                this.accountForm = { id: null, account_number: '', bank_name: 'manual', label: '', owner: '', manual: true };
                 this.showAccountModal = true;
             },
 
@@ -671,7 +679,7 @@ export function createAccountsModule(getApiService) {
             },
 
             /**
-             * Saves the name of the account of the modal
+             * Saves the name and the owner of the account of the modal
              * @returns {Promise<void>}
              */
             async submitAccountForm() {
@@ -679,10 +687,10 @@ export function createAccountsModule(getApiService) {
                 this.savingAccount = true;
                 try {
                     if (form.id === null) {
-                        await getApiService().createManualAccount(String(form.label || '').trim(), String(form.account_number || '').trim());
+                        await getApiService().createManualAccount(String(form.label || '').trim(), String(form.account_number || '').trim(), String(form.owner || '').trim());
                         this.showToast(this.t('manualAccountAdded'));
                     } else {
-                        await getApiService().updateBankAccount(form.id, String(form.account_number), form.bank_name, String(form.label || '').trim());
+                        await getApiService().updateBankAccount(form.id, String(form.account_number), form.bank_name, String(form.label || '').trim(), String(form.owner || '').trim());
                         this.showToast(this.t('accountUpdated'));
                     }
                     this.showAccountModal = false;

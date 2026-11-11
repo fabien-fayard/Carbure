@@ -152,7 +152,7 @@ test('the API of the transactions entered by hand and of the manual accounts', a
     await api.createManualAccount('Espèces');
     assert.deepEqual(calls.map(c => [c.url, c.options.method]), [
         [`${base}/transaction`, 'POST'], [`${base}/transaction`, 'PUT'], [`${base}/bank/manual`, 'POST']]);
-    assert.deepEqual(JSON.parse(calls[2].options.body), { label: 'Espèces', account_number: '' });
+    assert.deepEqual(JSON.parse(calls[2].options.body), { label: 'Espèces', account_number: '', owner: '' });
 
     mockFetch(() => json([{ id: 1, manual: true }]));
     assert.deepEqual(await api.fetchAccounts(), [{ id: 1, manual: true }]);

@@ -53,14 +53,21 @@ final class Bank {
      * Each bank account is returned with bankId = account_number@bank_name
      * @return list<array<string, mixed>> List of bank accounts with bankId and details
      *               (label: name given to the account, null if none; manual: an account whose
-     *               transactions are entered by hand)
+     *               transactions are entered by hand; owner: who the account belongs to, null
+     *               if not set; balance: given by the bank at the last synchronization, at
+     *               balance_at, null if unknown; the sum of its transactions for a manual account)
      */
     #[ApiRoute('/bank', method: 'GET')]
     public static function get(): array
     {
-        $sql = "SELECT MIN(id) AS id, account_number, bank_name, MAX(label) AS label FROM bank_account
-                GROUP BY account_number, bank_name ORDER BY bank_name, account_number";
-        $stmt = Db::execute($sql, "");
+        // The balance of a manual account: the sum of its transactions (the parts of a split
+        // transaction included: their sum is the amount of the bank)
+        $sql = "SELECT MIN(a.id) AS id, a.account_number, a.bank_name, MAX(a.label) AS label, MAX(a.owner) AS owner,
+                       IF(a.bank_name = ?, (SELECT COALESCE(SUM(t.amount), 0) FROM bank_transaction t
+                           WHERE t.account_number = a.account_number AND t.bank_name = a.bank_name), MAX(a.balance)) AS balance,
+                       MAX(a.balance_at) AS balance_at
+                FROM bank_account a GROUP BY a.account_number, a.bank_name ORDER BY a.bank_name, a.account_number";
+        $stmt = Db::execute($sql, "s", self::MANUAL);
         $result = Db::result($stmt);
         
         $accounts = array();
@@ -72,7 +79,10 @@ final class Bank {
                     'account_number' => $row['account_number'],
                     'bank_name' => $row['bank_name'],
                     'label' => $row['label'],
-                    'manual' => $row['bank_name'] === self::MANUAL
+                    'manual' => $row['bank_name'] === self::MANUAL,
+                    'owner' => $row['owner'],
+                    'balance' => $row['balance'] === null ? null : (float)$row['balance'],
+                    'balance_at' => $row['balance_at']
                 );
             }
         }
@@ -144,14 +154,14 @@ final class Bank {
      * result of their last synchronization (administrators).
      *
      * @return list<array<string, mixed>> The accounts: id, bankId, account_number, bank_name,
-     *               label (name given to the account, null if none), user_id and username
-     *               (who added it), last_sync_at, last_sync_status (OK|ERROR), last_sync_message,
+     *               label (name given to the account, null if none), owner (who the account
+     *               belongs to, null if not set), user_id and username (who added it), last_sync_at, last_sync_status (OK|ERROR), last_sync_message,
      *               manual (an account whose transactions are entered by hand, never synchronized)
      */
     #[ApiRoute('/bank/accounts', method: 'GET', admin: true)]
     public static function accounts(): array
     {
-        $sql = "SELECT a.id, a.account_number, a.bank_name, a.label, a.user_id, u.username,
+        $sql = "SELECT a.id, a.account_number, a.bank_name, a.label, a.owner, a.user_id, u.username,
                        a.last_sync_at, a.last_sync_status, a.last_sync_message
                 FROM bank_account a JOIN users u ON u.id = a.user_id
                 ORDER BY a.bank_name, a.account_number, u.username";
@@ -194,13 +204,15 @@ final class Bank {
      *
      * @param string      $label          Name of the account (required)
      * @param string|null $account_number Its number (optional, generated when empty)
+     * @param string|null $owner          Who the account belongs to (optional)
      * @return array<string, mixed> The account
      * @throws Error If the name or the number is invalid, or the number already used (409)
      */
     #[ApiRoute('/bank/manual', method: 'POST', admin: true, changes: ['accounts'])]
-    public static function createManual(string $label, ?string $account_number = null): array
+    public static function createManual(string $label, ?string $account_number = null, ?string $owner = null): array
     {
         $label = self::normalizeLabel($label);
+        $owner = self::normalizeLabel($owner);
         if ($label === null) {
             throw new ApiError("The name of the account is required", 400, 'account_label_required');
         }
@@ -211,11 +223,11 @@ final class Bank {
         if (Db::queryOne("SELECT id FROM bank_account WHERE account_number = ? AND bank_name = ?", "ss", $number, self::MANUAL)) {
             throw new ApiError("This account is already followed", 409, 'account_already_followed');
         }
-        $stmt = Db::execute("INSERT INTO bank_account (bank_name, account_number, label, user_id) VALUES (?, ?, ?, ?)", "sssi",
-            self::MANUAL, $number, $label, $userId);
+        $stmt = Db::execute("INSERT INTO bank_account (bank_name, account_number, label, owner, user_id) VALUES (?, ?, ?, ?, ?)", "ssssi",
+            self::MANUAL, $number, $label, $owner, $userId);
 
         return ['id' => $stmt->insert_id, 'bankId' => $number . '@' . self::MANUAL, 'account_number' => $number,
-                'bank_name' => self::MANUAL, 'label' => $label, 'user_id' => $userId, 'manual' => true];
+                'bank_name' => self::MANUAL, 'label' => $label, 'user_id' => $userId, 'manual' => true, 'owner' => $owner];
     }
 
     /**
@@ -226,24 +238,27 @@ final class Bank {
      * @param string      $bank_name      The woob backend name
      * @param string|null $label          Name given to the account: omitted (null) keeps
      *                                    the current one, empty removes it
+     * @param string|null $owner          Who the account belongs to: omitted (null) keeps
+     *                                    the current one, empty removes it
      * @return array<string, mixed> The account
      * @throws Error If not found, invalid or already followed by the household
      */
     #[ApiRoute('/bank', method: 'PUT', admin: true, changes: ['accounts'])]
-    public static function update(int $id, string $account_number, string $bank_name, ?string $label = null): array
+    public static function update(int $id, string $account_number, string $bank_name, ?string $label = null, ?string $owner = null): array
     {
         $account = self::existingAccount($id);
         self::validateAccount($account_number, $bank_name, $account['bank_name'] === self::MANUAL);
         $label = $label === null ? $account['label'] : self::normalizeLabel($label);
+        $owner = $owner === null ? $account['owner'] : self::normalizeLabel($owner);
         $userId = (int)$account['user_id'];
 
         if (Db::queryOne("SELECT id FROM bank_account WHERE account_number = ? AND bank_name = ? AND id <> ?", "ssi", $account_number, $bank_name, $id)) {
             throw new ApiError("This account is already followed", 409, 'account_already_followed');
         }
 
-        Db::execute("UPDATE bank_account SET account_number = ?, bank_name = ?, label = ? WHERE id = ?", "sssi", $account_number, $bank_name, $label, $id);
+        Db::execute("UPDATE bank_account SET account_number = ?, bank_name = ?, label = ?, owner = ? WHERE id = ?", "ssssi", $account_number, $bank_name, $label, $owner, $id);
 
-        return ['id' => $id, 'bankId' => "$account_number@$bank_name", 'account_number' => $account_number, 'bank_name' => $bank_name, 'label' => $label, 'user_id' => $userId];
+        return ['id' => $id, 'bankId' => "$account_number@$bank_name", 'account_number' => $account_number, 'bank_name' => $bank_name, 'label' => $label, 'user_id' => $userId, 'owner' => $owner];
     }
 
     /**
@@ -937,7 +952,8 @@ final class Bank {
         try {
             // The accounts are listed first: some modules only find the account afterwards (#43)
             Webservice::sendProgress("Syncing $bankId (accounts)...");
-            Woob::findAccount($bankId, $interactive, ...self::woobCallbacks($bankId, $debug));
+            $account = Woob::findAccount($bankId, $interactive, ...self::woobCallbacks($bankId, $debug));
+            self::recordBalance($bankId, $account['balance'] ?? null);
         } catch (Exception $e) {
             Logger::error("Error syncing $bankId: " . $e->getMessage());
             Webservice::sendProgress("Error syncing $bankId: " . $e->getMessage());
@@ -1103,6 +1119,29 @@ final class Bank {
         // transactions of the message moves the transactions
         if ($previous === null || $previous['last_sync_status'] !== $status
             || (!$success && $previous['last_sync_message'] !== $message)) {
+            Changes::touch('accounts');
+        }
+    }
+
+    /**
+     * Store the balance of an account as the bank gave it (shown in the Balances tab). The
+     * clients reload the accounts when it changed.
+     *
+     * @param string $bankId  The account (account_number@bank_name)
+     * @param mixed  $balance The balance listed by woob (ignored when not a number)
+     * @return void
+     */
+    private static function recordBalance(string $bankId, mixed $balance): void
+    {
+        if (!is_numeric($balance)) {
+            return;
+        }
+        [$number, $bank] = explode('@', $bankId, 2);
+        $balance = round((float)$balance, 2);
+        $previous = Db::queryOne("SELECT balance FROM bank_account WHERE account_number = ? AND bank_name = ? LIMIT 1", "ss", $number, $bank);
+        Db::execute("UPDATE bank_account SET balance = ?, balance_at = NOW() WHERE account_number = ? AND bank_name = ?",
+            "dss", $balance, $number, $bank);
+        if ($previous === null || $previous['balance'] === null || (float)$previous['balance'] !== $balance) {
             Changes::touch('accounts');
         }
     }

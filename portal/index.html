@@ -394,6 +394,14 @@
         </div>
 
         <div class="tabs" role="navigation" :aria-label="t('mainNavigation')">
+            <button
+                class="tab-button"
+                :class="{ active: activeTab === 'balances' }"
+                :aria-current="activeTab === 'balances' ? 'page' : null"
+                @click="setActiveTab('balances')">
+                <span class="material-icons" aria-hidden="true">account_balance_wallet</span>
+                {{ t('tabBalances') }}
+            </button>
             <button 
                 class="tab-button" 
                 :class="{ active: activeTab === 'transactions' }"
@@ -493,6 +501,10 @@
                     </button>
                 </div>
                 <div class="nav-drawer-items">
+                    <button type="button" :class="{ active: activeTab === 'balances' }"
+                            :aria-current="activeTab === 'balances' ? 'page' : null" @click="navigateFromDrawer('balances')">
+                        <span class="material-icons" aria-hidden="true">account_balance_wallet</span>{{ t('tabBalances') }}
+                    </button>
                     <button v-if="isAdmin" type="button" :class="{ active: activeTab === 'rules' }"
                             :aria-current="activeTab === 'rules' ? 'page' : null" @click="navigateFromDrawer('rules')">
                         <span class="material-icons" aria-hidden="true">rule</span>{{ t('tabRules') }}
@@ -1548,6 +1560,110 @@
                     </div>
                 </div>
 
+                <!-- Balances Tab: the balance of each account, grouped by owner, then the transactions of one account -->
+                <div v-else-if="activeTab === 'balances'" key="balances" class="tab-panel">
+                    <div class="trends-view">
+                        <section v-if="!balanceAccount" class="trends-card balances-card">
+                            <div class="panel-header page-header">
+                                <div>
+                                    <h2>{{ t('balancesTitle') }}</h2>
+                                </div>
+                                <!-- Filter: the accounts of one owner (the total follows) -->
+                                <div v-if="balanceOwners.length > 1" class="panel-actions">
+                                    <div class="trends-period balance-owners" role="group" :aria-label="t('balancesFilter')">
+                                        <button type="button" :class="{ active: balanceOwnerFilter === null }"
+                                                :aria-pressed="balanceOwnerFilter === null ? 'true' : 'false'" @click="balanceOwnerFilter = null">
+                                            {{ t('balancesAll') }}
+                                        </button>
+                                        <button v-for="o in balanceOwners" :key="o.key" type="button" :class="{ active: balanceOwnerFilter === o.key }"
+                                                :aria-pressed="balanceOwnerFilter === o.key ? 'true' : 'false'" @click="balanceOwnerFilter = o.key">
+                                            {{ o.owner || t('balancesNoOwner') }}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div v-if="loadingBalances && balanceAccounts.length === 0" class="transactions-hint">{{ t('balancesLoading') }}</div>
+                            <div v-else-if="balanceAccounts.length === 0" class="tags-empty">
+                                <span class="tags-empty-icon" aria-hidden="true"><span class="material-icons">account_balance_wallet</span></span>
+                                <p class="tags-empty-title">{{ t('balancesEmpty') }}</p>
+                            </div>
+                            <template v-else>
+                                <div class="tag-kpis balances-kpis">
+                                    <div class="tag-kpi tag-summary-total balances-total">
+                                        <div class="summary-label">{{ t('balancesTotal') }}</div>
+                                        <strong class="summary-value" :class="balancesTotal >= 0 ? 'positive' : 'negative'">{{ formatAmount(balancesTotal) }} {{ currencySymbol }}</strong>
+                                        <div class="trends-stat-sub">{{ t('balancesAccountCount', { count: visibleBalanceAccounts.length }) }}</div>
+                                    </div>
+                                </div>
+                                <!-- A group per owner (the accounts of nobody last), its total next to its name -->
+                                <template v-for="group in balanceGroups" :key="group.owner || ''">
+                                    <h3 class="accounts-section-title tag-list-title balance-owner">
+                                        <span class="material-icons" aria-hidden="true">{{ group.owner ? 'person' : 'group' }}</span>{{ group.owner || t('balancesNoOwner') }}
+                                        <span class="tag-list-count balance-owner-total">{{ formatAmount(group.total) }} {{ currencySymbol }}</span>
+                                    </h3>
+                                    <ul class="tag-list balance-list" :aria-label="group.owner || t('balancesNoOwner')">
+                                        <li v-for="a in group.accounts" :key="a.bankId" class="tag-item balance-item">
+                                            <button type="button" class="tag-open" @click="openBalanceAccount(a)" :title="balanceDateText(a)" :aria-label="t('balanceOperationsOf', { name: balanceAccountName(a) })">
+                                                <span class="tag-open-head">
+                                                    <span class="material-icons account-icon" aria-hidden="true">{{ a.manual ? 'account_balance_wallet' : 'account_balance' }}</span>
+                                                    <span class="tag-name">{{ balanceAccountName(a) }}</span>
+                                                    <strong v-if="a.balance !== null" class="tag-total" :class="a.balance >= 0 ? 'positive' : 'negative'">{{ formatAmount(a.balance) }} {{ currencySymbol }}</strong>
+                                                    <strong v-else class="tag-total">–</strong>
+                                                </span>
+                                                <span class="tag-period">{{ balanceAccountBank(a) }}</span>
+                                            </button>
+                                        </li>
+                                    </ul>
+                                </template>
+                            </template>
+                        </section>
+
+                        <!-- One account: its balance, then its transactions as in the summary of a tag -->
+                        <section v-else class="trends-card tag-summary balance-detail">
+                            <div class="panel-header page-header tag-summary-header">
+                                <div class="tag-summary-identity">
+                                    <button type="button" class="btn-secondary tag-back" @click="closeBalanceAccount">
+                                        <span class="material-icons" aria-hidden="true">arrow_back</span>{{ t('balancesBack') }}
+                                    </button>
+                                    <h3 tabindex="-1" class="tag-summary-title balance-detail-title">
+                                        <span class="material-icons account-icon" aria-hidden="true">{{ balanceAccount.manual ? 'account_balance_wallet' : 'account_balance' }}</span>{{ balanceAccountName(balanceAccount) }}
+                                    </h3>
+                                    <div class="tag-summary-meta">
+                                        <span v-if="balanceAccount.owner" class="tag-summary-period">
+                                            <span class="material-icons" aria-hidden="true">person</span>{{ balanceAccount.owner }}
+                                        </span>
+                                        <span class="tag-summary-period">{{ balanceAccountBank(balanceAccount) }}</span>
+                                    </div>
+                                </div>
+                                <div class="balance-detail-amount">
+                                    <div class="summary-label">{{ t('balanceLabel') }}</div>
+                                    <strong v-if="balanceAccount.balance !== null" class="summary-value" :class="balanceAccount.balance >= 0 ? 'positive' : 'negative'">{{ formatAmount(balanceAccount.balance) }} {{ currencySymbol }}</strong>
+                                    <strong v-else class="summary-value">–</strong>
+                                    <div class="trends-stat-sub">{{ balanceDateText(balanceAccount) }}</div>
+                                </div>
+                            </div>
+                            <section class="tag-panel tag-panel-transactions">
+                                <h4 class="tag-summary-heading">{{ t('balanceOperations') }} · {{ t('months.' + selectedMonth) }} {{ selectedYear }}</h4>
+                                <p v-if="loadingBalanceTransactions" class="transactions-hint">{{ t('loadingMessage') }}</p>
+                                <p v-else-if="balanceTransactions.length === 0" class="transactions-hint">{{ t('balanceNoOperation') }}</p>
+                                <ul v-else class="tag-transactions balance-transactions">
+                                        <li v-for="item in balanceTransactions" :key="item.id" class="tag-transaction">
+                                            <span class="transaction-icon tag-transaction-icon" :class="transactionCategory(item) ? '' : 'type-' + item.type" :style="transactionIconStyle(item)">
+                                                <span class="material-icons" aria-hidden="true">{{ transactionIcon(item) }}</span>
+                                            </span>
+                                            <span class="tag-transaction-main">
+                                                <span class="tag-transaction-label">{{ item.label }}</span>
+                                                <span class="tag-transaction-date">{{ formatDate(item.date) }}</span>
+                                            </span>
+                                            <span class="category-chip">{{ categoryOf(item.category).name || t('uncategorized') }}</span>
+                                            <span class="tag-transaction-amount" :class="item.amount >= 0 ? 'positive' : 'negative'">{{ formatAmount(item.amount) }} {{ currencySymbol }}</span>
+                                        </li>
+                                </ul>
+                            </section>
+                        </section>
+                    </div>
+                </div>
+
                 <!-- Categorization rules Tab -->
                 <div v-else-if="activeTab === 'rules'" key="rules" class="tab-panel">
                     <div class="trends-view">
@@ -1723,6 +1839,7 @@
                                             <div class="account-details">
                                                 <div class="account-name">
                                                     {{ accountName(a) }}
+                                                    <span v-if="a.owner" class="account-owner account-belongs" :title="t('accountOwner')"><span class="material-icons inline-icon" aria-hidden="true">person</span><span class="visually-hidden">{{ t('accountOwner') }} : </span>{{ a.owner }}</span>
                                                     <span v-if="a.username" class="account-owner" :title="t('accountAddedBy', { user: a.username })"><span class="material-icons inline-icon" aria-hidden="true">person_add</span>{{ t('accountAddedBy', { user: a.username }) }}</span>
                                                 </div>
                                                 <code class="device-token">{{ a.bankId }}</code>
@@ -1851,7 +1968,10 @@
                                 <li v-for="a in manualBankAccounts" :key="a.id" class="account-item">
                                     <span class="material-icons account-icon" aria-hidden="true">account_balance_wallet</span>
                                     <div class="account-details">
-                                        <div class="account-name">{{ accountName(a) }}</div>
+                                        <div class="account-name">
+                                            {{ accountName(a) }}
+                                            <span v-if="a.owner" class="account-owner account-belongs" :title="t('accountOwner')"><span class="material-icons inline-icon" aria-hidden="true">person</span><span class="visually-hidden">{{ t('accountOwner') }} : </span>{{ a.owner }}</span>
+                                        </div>
                                         <code class="device-token">{{ a.account_number }}</code>
                                     </div>
                                     <div class="device-actions">
@@ -3949,6 +4069,14 @@
                         <label for="field-account-label">{{ t('accountLabel') }}</label>
                         <input id="field-account-label" v-model="accountForm.label" maxlength="100" :placeholder="t('accountLabelPlaceholder')" aria-describedby="account-label-help" />
                         <small id="account-label-help">{{ t('accountLabelHelp') }}</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="field-account-owner">{{ t('accountOwner') }}</label>
+                        <input id="field-account-owner" v-model="accountForm.owner" maxlength="100" list="account-owners" :placeholder="t('accountOwnerPlaceholder')" aria-describedby="account-owner-help" />
+                        <datalist id="account-owners">
+                            <option v-for="owner in accountOwners" :key="owner" :value="owner"></option>
+                        </datalist>
+                        <small id="account-owner-help">{{ t('accountOwnerHelp') }}</small>
                     </div>
                     <div v-if="accountForm.id === null" class="form-group">
                         <label for="field-account-number">{{ t('manualAccountNumber') }}</label>
