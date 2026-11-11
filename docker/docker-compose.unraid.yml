@@ -8,6 +8,9 @@
 services:
   carbure:
     image: carbure-fork:local
+    # Never pulled (the image is on no registry) and built again at each deployment:
+    # "Pull and redeploy" of Portainer then takes the new code
+    pull_policy: build
     build:
       # The build context is the root of the project
       context: ..
