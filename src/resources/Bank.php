@@ -35,6 +35,9 @@ final class Bank {
      *  are entered by hand (a bank woob does not support, cash) */
     public const MANUAL = 'manual';
 
+    /** Type of a checking account in woob (AccountType.CHECKING) */
+    private const CHECKING = 1;
+
     /** Header of the sync token (the scheduler) */
     public const SYNC_TOKEN_HEADER = 'X-Sync-Token';
 
@@ -55,7 +58,8 @@ final class Bank {
      *               (label: name given to the account, null if none; manual: an account whose
      *               transactions are entered by hand; owner: who the account belongs to, null
      *               if not set; balance: given by the bank at the last synchronization, at
-     *               balance_at, null if unknown; the sum of its transactions for a manual account)
+     *               balance_at, null if unknown; the sum of its transactions for a manual account;
+     *               in_balances: shown in the Balances tab; deposit: a checking account)
      */
     #[ApiRoute('/bank', method: 'GET')]
     public static function get(): array
@@ -65,7 +69,7 @@ final class Bank {
         $sql = "SELECT MIN(a.id) AS id, a.account_number, a.bank_name, MAX(a.label) AS label, MAX(a.owner) AS owner,
                        IF(a.bank_name = ?, (SELECT COALESCE(SUM(t.amount), 0) FROM bank_transaction t
                            WHERE t.account_number = a.account_number AND t.bank_name = a.bank_name), MAX(a.balance)) AS balance,
-                       MAX(a.balance_at) AS balance_at
+                       MAX(a.balance_at) AS balance_at, MIN(a.in_balances) AS in_balances, MAX(a.account_type) AS account_type
                 FROM bank_account a GROUP BY a.account_number, a.bank_name ORDER BY a.bank_name, a.account_number";
         $stmt = Db::execute($sql, "s", self::MANUAL);
         $result = Db::result($stmt);
@@ -82,7 +86,9 @@ final class Bank {
                     'manual' => $row['bank_name'] === self::MANUAL,
                     'owner' => $row['owner'],
                     'balance' => $row['balance'] === null ? null : (float)$row['balance'],
-                    'balance_at' => $row['balance_at']
+                    'balance_at' => $row['balance_at'],
+                    'in_balances' => (bool)$row['in_balances'],
+                    'deposit' => (int)$row['account_type'] === self::CHECKING
                 );
             }
         }
@@ -156,19 +162,23 @@ final class Bank {
      * @return list<array<string, mixed>> The accounts: id, bankId, account_number, bank_name,
      *               label (name given to the account, null if none), owner (who the account
      *               belongs to, null if not set), user_id and username (who added it), last_sync_at, last_sync_status (OK|ERROR), last_sync_message,
-     *               manual (an account whose transactions are entered by hand, never synchronized)
+     *               manual (an account whose transactions are entered by hand, never synchronized),
+     *               in_balances (shown in the Balances tab), deposit (a checking account)
      */
     #[ApiRoute('/bank/accounts', method: 'GET', admin: true)]
     public static function accounts(): array
     {
         $sql = "SELECT a.id, a.account_number, a.bank_name, a.label, a.owner, a.user_id, u.username,
-                       a.last_sync_at, a.last_sync_status, a.last_sync_message
+                       a.in_balances, a.account_type, a.last_sync_at, a.last_sync_status, a.last_sync_message
                 FROM bank_account a JOIN users u ON u.id = a.user_id
                 ORDER BY a.bank_name, a.account_number, u.username";
         $accounts = [];
         foreach (Db::select($sql, "")->fetch_all(MYSQLI_ASSOC) as $row) {
-            $accounts[] = ['id' => $row['id'], 'bankId' => $row['account_number'] . '@' . $row['bank_name']] + $row
-                + ['manual' => $row['bank_name'] === self::MANUAL];
+            $type = (int)$row['account_type'];
+            unset($row['account_type']);
+            $accounts[] = ['id' => $row['id'], 'bankId' => $row['account_number'] . '@' . $row['bank_name']]
+                + ['in_balances' => (bool)$row['in_balances']] + $row
+                + ['manual' => $row['bank_name'] === self::MANUAL, 'deposit' => $type === self::CHECKING];
         }
         return $accounts;
     }
@@ -240,25 +250,28 @@ final class Bank {
      *                                    the current one, empty removes it
      * @param string|null $owner          Who the account belongs to: omitted (null) keeps
      *                                    the current one, empty removes it
+     * @param int|string|null $in_balances Shown in the Balances tab (1 or 0): omitted (null)
+     *                                    keeps the current choice
      * @return array<string, mixed> The account
      * @throws Error If not found, invalid or already followed by the household
      */
     #[ApiRoute('/bank', method: 'PUT', admin: true, changes: ['accounts'])]
-    public static function update(int $id, string $account_number, string $bank_name, ?string $label = null, ?string $owner = null): array
+    public static function update(int $id, string $account_number, string $bank_name, ?string $label = null, ?string $owner = null, int|string|null $in_balances = null): array
     {
         $account = self::existingAccount($id);
         self::validateAccount($account_number, $bank_name, $account['bank_name'] === self::MANUAL);
         $label = $label === null ? $account['label'] : self::normalizeLabel($label);
         $owner = $owner === null ? $account['owner'] : self::normalizeLabel($owner);
+        $shown = $in_balances === null ? (int)$account['in_balances'] : (int)!in_array($in_balances, [0, '0', 'false', ''], true);
         $userId = (int)$account['user_id'];
 
         if (Db::queryOne("SELECT id FROM bank_account WHERE account_number = ? AND bank_name = ? AND id <> ?", "ssi", $account_number, $bank_name, $id)) {
             throw new ApiError("This account is already followed", 409, 'account_already_followed');
         }
 
-        Db::execute("UPDATE bank_account SET account_number = ?, bank_name = ?, label = ?, owner = ? WHERE id = ?", "ssssi", $account_number, $bank_name, $label, $owner, $id);
+        Db::execute("UPDATE bank_account SET account_number = ?, bank_name = ?, label = ?, owner = ?, in_balances = ? WHERE id = ?", "ssssii", $account_number, $bank_name, $label, $owner, $shown, $id);
 
-        return ['id' => $id, 'bankId' => "$account_number@$bank_name", 'account_number' => $account_number, 'bank_name' => $bank_name, 'label' => $label, 'user_id' => $userId, 'owner' => $owner];
+        return ['id' => $id, 'bankId' => "$account_number@$bank_name", 'account_number' => $account_number, 'bank_name' => $bank_name, 'label' => $label, 'user_id' => $userId, 'owner' => $owner, 'in_balances' => (bool)$shown];
     }
 
     /**
@@ -954,6 +967,7 @@ final class Bank {
             Webservice::sendProgress("Syncing $bankId (accounts)...");
             $account = Woob::findAccount($bankId, $interactive, ...self::woobCallbacks($bankId, $debug));
             self::recordBalance($bankId, $account['balance'] ?? null);
+            self::recordType($bankId, $account['type'] ?? null);
         } catch (Exception $e) {
             Logger::error("Error syncing $bankId: " . $e->getMessage());
             Webservice::sendProgress("Error syncing $bankId: " . $e->getMessage());
@@ -1144,6 +1158,22 @@ final class Bank {
         if ($previous === null || $previous['balance'] === null || (float)$previous['balance'] !== $balance) {
             Changes::touch('accounts');
         }
+    }
+
+    /**
+     * Store the type of an account as the bank gave it (the checking accounts are listed first).
+     *
+     * @param string $bankId The account (account_number@bank_name)
+     * @param mixed  $type   The type listed by woob (ignored when not a number)
+     * @return void
+     */
+    private static function recordType(string $bankId, mixed $type): void
+    {
+        if (!is_numeric($type)) {
+            return;
+        }
+        [$number, $bank] = explode('@', $bankId, 2);
+        Db::execute("UPDATE bank_account SET account_type = ? WHERE account_number = ? AND bank_name = ?", "iss", (int)$type, $number, $bank);
     }
 
     /**

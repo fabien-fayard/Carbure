@@ -34,7 +34,7 @@ class BankTest extends DatabaseTestCase
         // 111@bnp is followed twice (by two users): listed once
         $this->assertSame(['fail@bank', '111@bnp'], array_column($accounts, 'bankId'));
         $this->assertSame(['bankId' => '111@bnp', 'account_number' => '111', 'bank_name' => 'bnp', 'label' => null, 'manual' => false,
-            'owner' => null, 'balance' => null, 'balance_at' => null],
+            'owner' => null, 'balance' => null, 'balance_at' => null, 'in_balances' => true, 'deposit' => false],
             array_diff_key($accounts[1], ['id' => true]));
         $this->assertGreaterThan(0, $accounts[1]['id']);
 
@@ -139,6 +139,28 @@ class BankTest extends DatabaseTestCase
         $this->assertNotNull($accounts['111@bnp']['balance_at']);
         // Not synchronized: still unknown
         $this->assertNull($accounts['fail@bank']['balance']);
+        // The type woob lists (fake woob: a checking account)
+        $this->assertTrue($accounts['111@bnp']['deposit']);
+        $this->assertFalse($accounts['fail@bank']['deposit']);
+        $this->assertTrue(array_column(Bank::accounts(), 'deposit', 'bankId')['111@bnp']);
+    }
+
+    public function testAnAccountCanBeHiddenFromTheBalances()
+    {
+        $this->loginAs(self::ADMIN);
+        $account = Bank::create('222', 'bnp', 'Prêt maison');
+        $shown = fn() => array_column(Bank::get(), 'in_balances', 'bankId')['222@bnp'];
+        $this->assertTrue($shown());
+
+        $this->assertFalse(Bank::update($account['id'], '222', 'bnp', null, null, 0)['in_balances']);
+        $this->assertFalse($shown());
+        $this->assertFalse(array_column(Bank::accounts(), 'in_balances', 'bankId')['222@bnp']);
+        // Omitted: kept, with the name of the account
+        $updated = Bank::update($account['id'], '222', 'bnp');
+        $this->assertSame([false, 'Prêt maison'], [$updated['in_balances'], $updated['label']]);
+        // As the query string gives it
+        $this->assertTrue(Bank::update($account['id'], '222', 'bnp', null, null, '1')['in_balances']);
+        $this->assertTrue($shown());
     }
 
     public function testTheBalanceOfAManualAccountIsTheSumOfItsTransactions()

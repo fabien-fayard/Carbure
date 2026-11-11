@@ -868,10 +868,15 @@ export function createApiService(baseUrl, authToken = null, onUnauthorized = nul
      * @param {string} bank_name - woob backend name
      * @param {string} label - Name given to the account ('' removes it)
      * @param {string} owner - Who the account belongs to ('' removes it)
+     * @param {boolean|null} inBalances - Shown in the Balances tab (null: unchanged)
      * @returns {Promise<Object>} The account
      */
-    async function updateBankAccount(id, account_number, bank_name, label = '', owner = '') {
-        return request(`${baseUrl}/bank`, { method: 'PUT', body: JSON.stringify({ id, account_number, bank_name, label, owner }) }, 'Failed to modify the account');
+    async function updateBankAccount(id, account_number, bank_name, label = '', owner = '', inBalances = null) {
+        const body = { id, account_number, bank_name, label, owner };
+        if (inBalances !== null) {
+            body.in_balances = inBalances ? 1 : 0;
+        }
+        return request(`${baseUrl}/bank`, { method: 'PUT', body: JSON.stringify(body) }, 'Failed to modify the account');
     }
 
     /**

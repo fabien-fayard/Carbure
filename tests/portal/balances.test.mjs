@@ -89,7 +89,7 @@ test('an account opened: its transactions of the selected month, then back to th
     assert.equal(context.balanceAccounts.length, 4);
     assert.equal(context.loadingBalances, false);
 
-    await context.openBalanceAccount(context.balanceAccounts[1]);
+    await context.openBalanceAccount(context.balanceAccounts.find(a => a.bankId === '2@bnp'));
     assert.equal(calls.at(-1).url, `${base}/balance/transactions?account=2%40bnp&month=11&year=2026`);
     assert.deepEqual(context.balanceTransactions, [{ id: 7, label: 'CB', amount: -5 }]);
     assert.equal(context.loadingBalanceTransactions, false);
@@ -106,4 +106,19 @@ test('an account opened: its transactions of the selected month, then back to th
     context.closeBalanceAccount();
     assert.equal(context.balanceAccount, null);
     assert.deepEqual(context.balanceTransactions, []);
+});
+
+test('the list: the checking accounts first, then by name, without the accounts hidden in the Accounts tab', async () => {
+    const accounts = [
+        { ...ACCOUNTS[0], label: 'Zèbre' },
+        { ...ACCOUNTS[1], label: 'Prêt maison', in_balances: false },
+        { ...ACCOUNTS[2], label: 'Livret', in_balances: true },
+        { ...ACCOUNTS[3], label: 'Courant', deposit: true },
+        { ...ACCOUNTS[0], bankId: '5@bnp', label: 'Assurance vie', deposit: false },
+    ];
+    mockFetch(() => json(accounts));
+    const context = balancesContext(createApiService('https://carbure.example.com/api', 't'));
+
+    await context.loadBalances();
+    assert.deepEqual(context.balanceAccounts.map(a => a.label), ['Courant', 'Assurance vie', 'Livret', 'Zèbre']);
 });

@@ -357,6 +357,8 @@
     "accountOwner": "Propriétaire",
     "accountOwnerPlaceholder": "ex. Marie, Paul, Commun…",
     "accountOwnerHelp": "Facultatif : à qui appartient le compte. Les comptes sont regroupés par propriétaire dans l'onglet Soldes.",
+    "accountInBalances": "Soldes",
+    "accountInBalancesHelp": "Afficher ce compte dans les soldes",
     "tabBalances": "Soldes",
     "balancesTitle": "Soldes des comptes",
     "balancesLoading": "Chargement des comptes...",

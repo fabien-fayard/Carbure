@@ -250,7 +250,7 @@ if (($argv[1] ?? '') === 'bank' && $type === 'list') {
     if (in_array('-s', $argv, true)) {
         // Only the ids (first step of a synchronization): also the accounts of the tests,
         // except "unlisted@<backend>"
-        echo json_encode(array_map(fn($account) => ['id' => "$account@$backend", 'balance' => $account === 'DEMO0000001' ? '1234.56' : '250.00'],
+        echo json_encode(array_map(fn($account) => ['id' => "$account@$backend", 'balance' => $account === 'DEMO0000001' ? '1234.56' : '250.00', 'type' => $account === '00087654321' ? 2 : 1],
             ['DEMO0000001', '00087654321', '1', '111', '123', '222', '333', 'fail', 'empty', 'broken',
              'forbidden', 'slow', 'nocoming', 'validate', '2fa', 'labelonly'])) . "\n";
         exit(0);

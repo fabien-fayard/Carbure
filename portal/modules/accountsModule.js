@@ -44,6 +44,17 @@ export function manualAccountsOf(accounts) {
     return (accounts || []).filter(a => a.manual);
 }
 
+/**
+ * Accounts in the order of the lists: the checking accounts first, then the others, each
+ * by name (the name given to the account, else its number)
+ * @param {Array<{deposit?: boolean, label?: (string|null), account_number?: string}>} accounts - Accounts
+ * @returns {Array<Object>} A sorted copy
+ */
+export function sortAccounts(accounts) {
+    const name = a => String(a.label || a.account_number || '');
+    return [...(accounts || [])].sort((a, b) => (!!b.deposit - !!a.deposit) || name(a).localeCompare(name(b)));
+}
+
 /** Configuration in woob of a bank being connected, empty */
 // Last choice of the bank list of the modal adding accounts: the connection of a new bank
 // (never a woob backend name, made of letters, digits and _)
@@ -109,7 +120,7 @@ export function createAccountsModule(getApiService) {
              * @returns {Array<{key: string, backend: Object|null, accounts: Array}>}
              */
             bankGroups() {
-                return accountsByBank(this.bankBackends, this.bankAccounts);
+                return accountsByBank(this.bankBackends, sortAccounts(this.bankAccounts));
             },
 
             /**
@@ -117,7 +128,7 @@ export function createAccountsModule(getApiService) {
              * @returns {Array<Object>}
              */
             manualBankAccounts() {
-                return manualAccountsOf(this.bankAccounts);
+                return sortAccounts(manualAccountsOf(this.bankAccounts));
             },
 
             /**
@@ -700,6 +711,21 @@ export function createAccountsModule(getApiService) {
                 } finally {
                     this.savingAccount = false;
                 }
+            },
+
+            /**
+             * Shows an account in the Balances tab, or hides it (a loan changes the total)
+             * @param {Object} account - Followed account
+             * @param {boolean} shown - Shown in the balances
+             * @returns {Promise<void>}
+             */
+            async setAccountInBalances(account, shown) {
+                try {
+                    await getApiService().updateBankAccount(account.id, String(account.account_number), account.bank_name, account.label || '', account.owner || '', shown);
+                } catch (error) {
+                    this.showToast(this.apiErrorText(error));
+                }
+                await this.loadBankAccounts();
             },
 
             /**

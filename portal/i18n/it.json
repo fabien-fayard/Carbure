@@ -357,6 +357,8 @@
     "accountOwner": "Titolare",
     "accountOwnerPlaceholder": "es. Maria, Paolo, Comune…",
     "accountOwnerHelp": "Facoltativo: a chi appartiene il conto. I conti sono raggruppati per titolare nella scheda Saldi.",
+    "accountInBalances": "Saldi",
+    "accountInBalancesHelp": "Mostra questo conto nei saldi",
     "tabBalances": "Saldi",
     "balancesTitle": "Saldi dei conti",
     "balancesLoading": "Caricamento dei conti...",

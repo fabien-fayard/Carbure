@@ -9749,11 +9749,6 @@ button.is-busy:not(.btn-confirm-danger):hover {
     margin-left: auto;
 }
 
-.account-belongs {
-    font-weight: 500;
-    color: var(--text-primary);
-}
-
 /* Balance of the account shown, on the right of its name and owner */
 .balance-detail-amount {
     margin-left: auto;
@@ -9764,4 +9759,16 @@ button.is-busy:not(.btn-confirm-danger):hover {
     display: block;
     font-size: 24px;
     font-variant-numeric: tabular-nums;
+}
+
+/* Owner of an account, as a tag after its name (Accounts tab) */
+.account-owner-tag {
+    margin-left: 8px;
+    vertical-align: middle;
+}
+
+/* Switch showing an account in the Balances tab, before the actions of its row */
+.account-in-balances {
+    margin-right: 8px;
+    font-size: 13px;
 }

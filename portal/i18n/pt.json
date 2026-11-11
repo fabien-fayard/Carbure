@@ -357,6 +357,8 @@
     "accountOwner": "Titular",
     "accountOwnerPlaceholder": "ex. Maria, Paulo, Comum…",
     "accountOwnerHelp": "Opcional: a quem pertence a conta. As contas são agrupadas por titular no separador Saldos.",
+    "accountInBalances": "Saldos",
+    "accountInBalancesHelp": "Mostrar esta conta nos saldos",
     "tabBalances": "Saldos",
     "balancesTitle": "Saldos das contas",
     "balancesLoading": "A carregar as contas...",

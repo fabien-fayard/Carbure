@@ -328,14 +328,14 @@ class WoobTest extends TestCase
     public function testTheAccountIsFoundInTheListOfItsBackend()
     {
         // First step of a synchronization (#43): only the accounts of its backend, only their
-        // id and their balance (stored for the Balances tab)
+        // id, balance and type (stored for the Balances tab)
         $commands = [];
         $account = Woob::findAccount('111@bnp', false, null, null, function ($command) use (&$commands) {
             $commands[] = $command;
         });
-        $this->assertSame(['id' => '111@bnp', 'balance' => '250.00'], $account);
+        $this->assertSame(['id' => '111@bnp', 'balance' => '250.00', 'type' => 1], $account);
         $this->assertCount(1, $commands);
-        $this->assertStringContainsString("bank list -b 'bnp' -f json -s id,balance", $commands[0]);
+        $this->assertStringContainsString("bank list -b 'bnp' -f json -s id,balance,type", $commands[0]);
     }
 
     public function testAnAccountNotListedByTheBankFails()

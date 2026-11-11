@@ -357,6 +357,8 @@
     "accountOwner": "Titular",
     "accountOwnerPlaceholder": "p. ej. María, Pablo, Común…",
     "accountOwnerHelp": "Opcional: a quién pertenece la cuenta. Las cuentas se agrupan por titular en la pestaña Saldos.",
+    "accountInBalances": "Saldos",
+    "accountInBalancesHelp": "Mostrar esta cuenta en los saldos",
     "tabBalances": "Saldos",
     "balancesTitle": "Saldos de las cuentas",
     "balancesLoading": "Cargando las cuentas...",

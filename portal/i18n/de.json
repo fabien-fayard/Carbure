@@ -357,6 +357,8 @@
     "accountOwner": "Inhaber",
     "accountOwnerPlaceholder": "z. B. Marie, Paul, Gemeinsam…",
     "accountOwnerHelp": "Optional: wem das Konto gehört. Die Konten werden im Reiter Kontostände nach Inhaber gruppiert.",
+    "accountInBalances": "Salden",
+    "accountInBalancesHelp": "Dieses Konto in den Salden anzeigen",
     "tabBalances": "Kontostände",
     "balancesTitle": "Kontostände",
     "balancesLoading": "Konten werden geladen...",

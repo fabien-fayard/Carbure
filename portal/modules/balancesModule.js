@@ -3,11 +3,14 @@
  *
  * Balances tab (every user): the balance of each account of the household, grouped by
  * owner (the name given to an account in the Accounts tab), then the transactions of
- * one account for the month selected in the header. The balance of a synchronized account is the one its bank gave at the
+ * one account for the month selected in the header. The checking accounts come first, the
+ * accounts hidden in the Accounts tab are not listed. The balance of a synchronized account is the one its bank gave at the
  * last synchronization; the balance of a manual account is the sum of its transactions.
  *
  * @module balancesModule
  */
+
+import { sortAccounts } from './accountsModule.js';
 
 /**
  * Accounts grouped by owner, in the order of the names of the owners, the accounts of
@@ -107,7 +110,8 @@ export function createBalancesModule(getApiService) {
             async loadBalances() {
                 this.loadingBalances = true;
                 try {
-                    this.balanceAccounts = await getApiService().fetchAccounts();
+                    // Not the accounts hidden in the Accounts tab (a loan changes the total)
+                    this.balanceAccounts = sortAccounts((await getApiService().fetchAccounts()).filter(a => a.in_balances !== false));
                     if (this.balanceAccount) {
                         const account = this.balanceAccounts.find(a => a.bankId === this.balanceAccount.bankId);
                         if (account) {

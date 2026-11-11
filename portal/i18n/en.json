@@ -357,6 +357,8 @@
     "accountOwner": "Owner",
     "accountOwnerPlaceholder": "e.g. Mary, Paul, Joint…",
     "accountOwnerHelp": "Optional: who the account belongs to. The accounts are grouped by owner in the Balances tab.",
+    "accountInBalances": "Balances",
+    "accountInBalancesHelp": "Show this account in the balances",
     "tabBalances": "Balances",
     "balancesTitle": "Account balances",
     "balancesLoading": "Loading the accounts...",

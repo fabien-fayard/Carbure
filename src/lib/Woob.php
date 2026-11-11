@@ -204,8 +204,8 @@ final class Woob {
         if (str_starts_with($bankId, '-') || !preg_match(self::BACKEND_NAME, $backend)) {
             throw new Exception("Invalid bank account $bankId");
         }
-        // Only their id and balance: the check needs the id, the balance is stored (Balances tab)
-        $command = self::path() . " bank list -b " . escapeshellarg($backend) . " -f json -s id,balance" . self::loggingOptions();
+        // Only their id, balance and type: the check needs the id, the others are stored (Balances tab)
+        $command = self::path() . " bank list -b " . escapeshellarg($backend) . " -f json -s id,balance,type" . self::loggingOptions();
         Logger::debug("Calling woob : $command");
         if ($onCommand !== null) {
             $onCommand($command);
