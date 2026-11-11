@@ -1,0 +1,55 @@
+# Fork deployment on Unraid, as a Portainer stack built from this Git repository
+# (Stacks > Add stack > Repository, compose path: docker/docker-compose.unraid.yml).
+# The image is built on the server from the branch chosen in Portainer. The data is the
+# one of the previous stack: /mnt/user/appdata/carbure and the existing database volume,
+# whose exact name (Portainer > Volumes) is given by DB_VOLUME.
+# Environment variables of the stack: DB_PASSWORD (the one of the previous stack),
+# DB_VOLUME, and CARBURE_PORT when 8080 is taken.
+services:
+  carbure:
+    image: carbure-fork:local
+    build:
+      # The build context is the root of the project
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "${CARBURE_PORT:-8080}:80"
+    environment:
+      DB_HOST: db
+      DB_NAME: carbure
+      DB_USER: carbure
+      DB_PASSWORD: ${DB_PASSWORD:-change-me}
+      LANGUAGE: fr
+      CARBURE_PORT: ${CARBURE_PORT:-8080}
+      # Daily bank synchronization (seconds); remove to disable
+      SYNC_INTERVAL: 86400
+    volumes:
+      - /mnt/user/appdata/carbure:/data
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: mariadb:13
+    environment:
+      MARIADB_DATABASE: carbure
+      MARIADB_USER: carbure
+      MARIADB_PASSWORD: ${DB_PASSWORD:-change-me}
+      MARIADB_RANDOM_ROOT_PASSWORD: "yes"
+      MARIADB_AUTO_UPGRADE: "1"
+    volumes:
+      - carbure-db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+volumes:
+  # The existing volume: the stack fails to start when it is not found, instead of
+  # creating an empty database
+  carbure-db:
+    external: true
+    name: ${DB_VOLUME:-carbure_carbure-db}
